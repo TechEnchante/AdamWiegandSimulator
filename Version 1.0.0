@@ -1,0 +1,153 @@
+//New Circuit Design:
+//  Arduino    Component
+//    2 ------> button   (active low)                   
+//    4 ------> output D1
+//    7 ------> output D0
+//
+//    Arduino    Button
+//     ----      -----
+//         |       | 
+//       2 |-----     ------
+//     ----                 |
+//                        ----- Ground
+//                         ---
+//                          -
+
+//Weigand Simulator version 1.0.0
+// Adds value retention and button repetition without computer connected. 
+//First initial release for use in Lab
+//All promised features of completed 1.0.0 have been implemented
+//This is the first true release version as it does not require a computer to be constantly connected. The new numbering system will be 1.x(New feature=increase).x(Bug fix=increase)
+
+
+const int W_D0=7; 
+// Wiegand data 0 line is assigned to digital pin 7 (D7).
+const int W_D1=4; 
+//Weigand data 1 line is assigned to digital pin 4 (D4).
+const int button=2;
+//input button is assigned to digital pin 2, when it is pressed, the pin goes high to low
+
+
+// serial line input variables
+boolean got_line; // 'true' on newline ('\n') reception
+char buf[16]; // the input buffer
+int index = 0; // current position in buffer
+unsigned long timeLast; //take the last time to count 5 seconds
+boolean sendContinually; //'true' send the last data received every 5 seconds indefinitely 
+
+void outwiegbit(unsigned int b); // output one Wiegand bit
+void outwieg26(uint32_t u32); // output a Wiegand-26 code
+void process_line(const char str[]); // process the input line received from the serial port
+
+void loop() 
+{  
+  if ( got_line )
+  {
+    process_line(buf);
+    got_line = false;
+    index = 0;
+  }
+  else while (Serial.available())
+  {
+    char c = Serial.read();
+    buf[index++] = c;
+    sendContinually=false;
+    if ((c == '\n') || (index == sizeof(buf)-1))
+    {
+      buf[index] = '\0';
+      got_line = true;
+    }
+  }
+
+  //read the button state
+  if(digitalRead(button)==LOW){ //if button is pressed
+      sendContinually=true; 
+      timeLast=millis();
+  }
+
+  //repeat the last entered value every 5 seconds indefinitely after a button press
+  if(sendContinually==true){
+    if(millis()-timeLast>=5000){  //if 5 seconds have passed
+      process_line(buf);
+      timeLast=millis();    
+    }
+  }   
+  
+}
+
+void setup ()
+{
+  // initializations code, it runs once:
+  pinMode(W_D0, OUTPUT);  
+  pinMode(W_D1, OUTPUT);
+  pinMode(2,INPUT_PULLUP);
+  
+  digitalWrite(W_D0, 1); // Set Data 0 line to IDLE state.
+  digitalWrite(W_D1, 1); // Set Data 1 line to IDLE state.
+  
+  got_line = false;  
+  Serial.begin(9600);
+  Serial.write("\nWeigand Simulator\n");
+  Serial.write("\n\nWiegand Simulator to Test 26 Bit Reads - Aug 2019- Version 0.9.0\n");
+  Serial.write("D7 <--> Wiegand D0\n");
+  Serial.write("D4 <--> Wiegand D1\n");
+  Serial.write("GND ---> Panel Ground\n");
+  Serial.write("\nEnter a 7 digit number click send to send Weigand data\n");
+}
+
+// outputs ONE Weigand BIT to line ready state. (Fix for earlier issue on 0.6.2 DO NOT REMOVE)
+void outwiegbit(unsigned int b)
+{
+  int sel = b == 0 ? W_D0 : W_D1;
+  digitalWrite(sel, 0);
+  delayMicroseconds(80);
+  digitalWrite(sel, 1);
+  delayMicroseconds(240);
+//This section sets weigand timing for output. 
+}
+
+
+
+// u32 is actually the 24-bit numeric code
+void outwieg26(uint32_t u32)
+{
+  uint32_t tmp = u32;
+  unsigned int p_even = 0;
+  unsigned int p_odd = 1;
+  // compute parity on trailing group of bits 
+  for (int n=0; n<12; ++n)
+  {
+    p_odd ^= (tmp & 1);
+    tmp >>= 1;
+  }
+  // compute parity on heading group of bits
+  for (int n=12; n<24; ++n)
+  {
+    p_even ^= (tmp & 1);
+    tmp >>= 1;
+  }
+  // now output data bits framed by parity ones
+  outwiegbit(p_even);
+  for (int n=0; n<24; ++n)
+  {
+    outwiegbit((u32 >> (23-n)) & 1);
+  }
+  outwiegbit(p_odd);  
+}
+
+
+
+void process_line(const char str[])
+{
+  char msg[64];
+  long l = atol(str);
+  if (l < 0 || l > 0xFFFFFF)
+  {
+    Serial.write("ERROR\n");
+    return;
+  }
+  sprintf(msg, "OK: %ld (0x%06lX)\n", l, l);
+  Serial.write(msg);
+  outwieg26((unsigned long) l);
+  delay(1000);
+}
