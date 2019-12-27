@@ -13,11 +13,9 @@
 //                         ---
 //                          -
 
-//Weigand Simulator version 1.0.0
-// Adds value retention and button repetition without computer connected. 
-//First initial release for use in Lab
-//All promised features of completed 1.0.0 have been implemented
-//This is the first true release version as it does not require a computer to be constantly connected. The new numbering system will be 1.x(New feature=increase).x(Bug fix=increase)
+//Weigand Simulator version 1.1.0
+// Adds the ability to send multiple 26 wiegand credentials out to the control panel. 
+//The new numbering system will be 1.x(New feature=increase).x(Bug fix=increase)
 
 
 const int W_D0=7; 
